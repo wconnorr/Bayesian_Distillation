@@ -82,3 +82,7 @@ if __name__ == '__main__':
   print("Loss:\t{}\t{}\t{}".format(np.mean(mean_losses[1][:-1]), np.min(mean_losses[1][:-1]), mean_losses[1][-1]))
   print("Acc :\t{}\t{}\t{}".format(np.mean(accs[1][:-1]), np.max(accs[1][:-1]), accs[1][-1]))
   print("Cal :\t{}\t{}\t{}".format(np.mean(cals[1][:-1]), np.min(cals[1][:-1]), cals[1][-1]))
+
+
+
+# TODO: Derive posterior predictive

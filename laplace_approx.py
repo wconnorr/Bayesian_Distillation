@@ -10,6 +10,8 @@ import torchvision
 
 import torchmetrics
 
+from tqdm import tqdm
+
 from models import Distiller3D, SimpleConvNet 
 from helper import load_distiller_sd_fabric
 
@@ -34,14 +36,14 @@ cal_error_f = torchmetrics.classification.MulticlassCalibrationError(10)
 def evaluate(model, loader, device):
   with torch.no_grad():
     loss = 0; n_correct = 0; cal = 0
-    for x, y in loader:
+    for x, y in tqdm(loader):
       x, y = x.to(device), y.to(device)
       y_hat = model(x)
       if type(y_hat) == tuple:
         y_hat = y_hat[0]
       loss += F.cross_entropy(y_hat, y, reduction='sum').item()
       n_correct += (y_hat.argmax(1) == y).bool().sum().item()
-      cal = cal_error_f(y_hat, y)*y_hat.size(0) # get sum instead of mean
+      cal = cal_error_f(y_hat, y)*y_hat.size(0)
   return loss, n_correct, cal
 
 if __name__ == '__main__':
@@ -120,6 +122,8 @@ if __name__ == '__main__':
     l_cals.append(cal)
     print("Lap Learner {}:\t{:.4f}\t{:.4f}\t{:.4f}".format(trial, l_mean_losses[-1], l_accs[-1], l_cals[-1]))
     print()
+
+    quit()
     # TODO: Can we graph the Laplace approx onto / in comparison to the loss landscape?
 
   
