@@ -1,6 +1,10 @@
 import torch
 import torch.nn as nn
 
+import pyro
+import pyro.distributions as dist
+from pyro.nn import PyroModule, PyroSample
+
 # Distiller w/ 3D input (images)
 class Distiller3D(nn.Module):
   def __init__(self, c, h, w, n_classes, batch_size, inner_lr=.02, inner_momentum=None, conditional_generation=False):
@@ -60,6 +64,34 @@ class SimpleConvNet(nn.Module):
   def forward(self, x):
     x = self.convs(x)
     return self.lin(x.flatten(1))
+
+class BayesConvNet(nn.Module):
+  def __init__(self, c, h, w, n_classes, device):
+    super(BayesConvNet, self).__init__()
+    self.c1 = PyroModule[nn.Conv2d](c, 16, 3, padding=1)
+    self.c2 = PyroModule[nn.Conv2d](16, 32, 3, padding=1)
+    
+    self.lin = PyroModule[nn.Linear](32*h*w, n_classes)
+
+  
+    # Define priors p(θ)
+    # This is the only way I could find to put the module on the device: .to(device) doesn't work...
+    self.c1.weight = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.c1.weight.shape).to_event(self.c1.weight.dim()))
+    self.c1.bias = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.c1.bias.shape).to_event(self.c1.bias.dim()))
+    self.c2.weight = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.c2.weight.shape).to_event(self.c2.weight.dim()))
+    self.c2.bias = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.c2.bias.shape).to_event(self.c2.bias.dim()))
+    self.lin.weight = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.lin.weight.shape).to_event(self.lin.weight.dim()))
+    self.lin.bias = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.lin.bias.shape).to_event(self.lin.bias.dim()))
+
+  def forward(self, x, y=None):
+    sigma = pyro.sample("sigma", dist.Uniform(0.,10.))
+    x = F.relu(self.c1(x))
+    x = F.relu(self.c2(x))
+    mean = self.lin(x.flatten(1))
+    # loss function defined in here:
+    with pyro.plate('data', mean.shape[0]):
+        obs = pyro.sample('obs', dist.Normal(mean, sigma), obs=y)
+    return mean
 
 class CartpoleActor(nn.Module):
   def __init__(self, state_size=4, action_size=2):
