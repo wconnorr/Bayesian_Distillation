@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 
 import torch
@@ -38,7 +40,7 @@ def evaluate(model, loader, device):
     loss = 0; n_correct = 0; cal = 0
     for x, y in tqdm(loader):
       x, y = x.to(device), y.to(device)
-      y_hat = model(x)
+      y_hat = model(x, link_approx='probit')
       if type(y_hat) == tuple:
         y_hat = y_hat[0]
       loss += F.cross_entropy(y_hat, y, reduction='sum').item()
@@ -74,7 +76,7 @@ if __name__ == '__main__':
   l_cals = []
   
   # Inner learning 
-  print("Learner type \tloss\tacc\tcal\n")
+  print("Learner type \tloss\tacc\tcal\ttime\n")
   for trial in range(num_trials):
     len_data = len(val_dataset)
     # model = SimpleConvNet(c, h, w, 10)
@@ -94,12 +96,14 @@ if __name__ == '__main__':
     inner_optim.step()
     inner_optim.zero_grad()
 
-    # Validate standard learner
-    sum_loss, n_correct, cal = evaluate(model, val_loader, device)
-    mean_losses.append(sum_loss / len_data)
-    accs.append(n_correct / len_data)
-    cals.append(cal)
-    print("Std Learner {}:\t{:.4f}\t{:.4f}\t{:.4f}".format(trial, mean_losses[-1], accs[-1], cals[-1]))
+    # # Validate standard learner
+    # begin = time.time()
+    # sum_loss, n_correct, cal = evaluate(model, val_loader, device)
+    # end = time.time()
+    # mean_losses.append(sum_loss / len_data)
+    # accs.append(n_correct / len_data)
+    # cals.append(cal)
+    # print("Std Learner {}:\t{:.4f}\t{:.4f}\t{:.4f}\t{}".format(trial, mean_losses[-1], accs[-1], cals[-1], end-begin))
 
     # Laplace Approx
     la = Laplace(model, likelihood='regression', subset_of_weights='all', hessian_structure='kron')
@@ -116,11 +120,13 @@ if __name__ == '__main__':
     #   print(tup.shape)
 
     # Validate Laplace
+    begin = time.time()
     sum_loss, n_correct, cal = evaluate(la, val_loader, device)
+    end = time.time()
     l_mean_losses.append(sum_loss / len_data)
     l_accs.append(n_correct / len_data)
     l_cals.append(cal)
-    print("Lap Learner {}:\t{:.4f}\t{:.4f}\t{:.4f}".format(trial, l_mean_losses[-1], l_accs[-1], l_cals[-1]))
+    print("Lap Learner {}:\t{:.4f}\t{:.4f}\t{:.4f}\t{}".format(trial, l_mean_losses[-1], l_accs[-1], l_cals[-1], end-begin))
     print()
 
     quit()

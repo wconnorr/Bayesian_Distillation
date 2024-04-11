@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import pyro
 import pyro.distributions as dist
@@ -26,6 +27,36 @@ class Distiller3D(nn.Module):
       return self.x
     else:
       return self.x, self.y
+
+class Distiller3D_Dropout(nn.Module):
+  def __init__(self, c, h, w, n_classes, batch_size, inner_lr=.02, inner_momentum=None, conditional_generation=False, dropout=0.5):
+    super(Distiller3D_Dropout, self).__init__()
+    self.conditional_generation = conditional_generation
+
+    self.x = nn.Parameter(torch.randn((batch_size, c, h, w)), True)
+    if not conditional_generation:
+
+      self.y = nn.Parameter(torch.randn((batch_size, n_classes)), True)
+
+    # Inner optimizer parameters
+    if inner_lr is not None:
+      self.inner_lr = nn.Parameter(torch.tensor(inner_lr), True)
+    if inner_momentum is not None:
+      self.inner_momentum = nn.Parameter(torch.tensor(inner_momentum), True)
+
+    if dropout != 0:
+      self.dropout = nn.Dropout(p=dropout)
+    else:
+      self.dropout = None
+
+  def forward(self, dummy=None): # dummy is needed for lightning, maybe?
+    if self.dropout:
+      return self.dropout(self.x) if self.conditional_generation else (self.dropout(self.x), self.y)
+    if self.conditional_generation:
+      return self.x
+    else:
+      return self.x, self.y
+
 
 # Distiller w/ 1D input (just # features) 
 class Distiller1D(nn.Module):
@@ -65,7 +96,7 @@ class SimpleConvNet(nn.Module):
     x = self.convs(x)
     return self.lin(x.flatten(1))
 
-class BayesConvNet(nn.Module):
+class BayesConvNet(PyroModule):
   def __init__(self, c, h, w, n_classes, device):
     super(BayesConvNet, self).__init__()
     self.c1 = PyroModule[nn.Conv2d](c, 16, 3, padding=1)
@@ -76,12 +107,12 @@ class BayesConvNet(nn.Module):
   
     # Define priors p(θ)
     # This is the only way I could find to put the module on the device: .to(device) doesn't work...
-    self.c1.weight = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.c1.weight.shape).to_event(self.c1.weight.dim()))
-    self.c1.bias = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.c1.bias.shape).to_event(self.c1.bias.dim()))
-    self.c2.weight = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.c2.weight.shape).to_event(self.c2.weight.dim()))
-    self.c2.bias = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.c2.bias.shape).to_event(self.c2.bias.dim()))
+    self.c1.weight  = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.c1.weight.shape).to_event(self.c1.weight.dim()))
+    self.c1.bias    = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.c1.bias.shape).to_event(self.c1.bias.dim()))
+    self.c2.weight  = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.c2.weight.shape).to_event(self.c2.weight.dim()))
+    self.c2.bias    = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.c2.bias.shape).to_event(self.c2.bias.dim()))
     self.lin.weight = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.lin.weight.shape).to_event(self.lin.weight.dim()))
-    self.lin.bias = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.lin.bias.shape).to_event(self.lin.bias.dim()))
+    self.lin.bias   = PyroSample(dist.Normal(torch.tensor(0.).to(device),10.).expand(self.lin.bias.shape).to_event(self.lin.bias.dim()))
 
   def forward(self, x, y=None):
     sigma = pyro.sample("sigma", dist.Uniform(0.,10.))
@@ -90,7 +121,11 @@ class BayesConvNet(nn.Module):
     mean = self.lin(x.flatten(1))
     # loss function defined in here:
     with pyro.plate('data', mean.shape[0]):
+        print(sigma.shape)
+        print(mean.shape)
+        print(y.shape)
         obs = pyro.sample('obs', dist.Normal(mean, sigma), obs=y)
+        print(obs.shape)
     return mean
 
 class CartpoleActor(nn.Module):

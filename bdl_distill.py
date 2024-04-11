@@ -13,6 +13,11 @@ import torchvision
 
 import torchmetrics
 
+import pyro
+import pyro.distributions as dist
+from pyro.nn import PyroModule, PyroSample
+from pyro.infer import autoguide, SVI, Trace_ELBO, Predictive
+
 from tqdm import tqdm
 
 from models import Distiller3D, SimpleConvNet, BayesConvNet
@@ -34,6 +39,27 @@ def evaluate(model, loader, device):
       n_correct += (y_hat.argmax(1) == y).bool().sum().item()
       cal = cal_error_f(y_hat, y)*y_hat.size(0)
   return loss, n_correct, cal
+
+def eval_bayes(predictive, val_loader, device):
+    with torch.no_grad():
+        total_loss = 0
+        cal_error = 0
+        correct = 0
+        guesses = 0
+        total = len(val_dataset)
+        
+        bayes_mlp.eval()
+        for x,y in val_loader:
+            x, y = x.to(device), y.to(device)
+            observations = predictive(x)['obs'].transpose(1,0) # changes to (batch, preds)
+            mode, probs, mode_probs = get_pred_probs(observations, threshold=.3)
+            correct += (mode == y).sum()
+            guesses += (mode+1).count_nonzero()
+            # To get loss comparable to cross entropy, just get negative log likelihood of n (no need for softmax since we don't have logits)
+            total_loss += -torch.log(mode_probs).sum().item()
+            cal_error +=  cal_error_f(probs, y.to(device)).item()
+    
+    return total_loss, correct, cal_error, guesses
 
 
 if __name__ == '__main__':
@@ -58,6 +84,7 @@ if __name__ == '__main__':
   losses = []
   accs  = []
   cals = []
+  percent_guessed = []
   
   for trial in tqdm(range(num_trials)):
     model = BayesConvNet(c, h, w, 10, device)
@@ -67,18 +94,25 @@ if __name__ == '__main__':
     inner_optim = pyro.optim.SGD({'lr': distiller.inner_lr.item()})
     svi = SVI(model, guide, inner_optim, loss=Trace_ELBO())
     model.train()
+    print(xd.shape)
+    print(yd.shape)
     loss = svi.step(xd, yd)
     
+    n_samples = 100
+    predictive = Predictive(model, guide=guide, num_samples=n_samples)
+
 
     # Validate standard learner
-    loss, acc, cal = evaluate(model, val_loader, device)
-    losses.append(loss / vallen)
-    accs.append(acc / vallen)
+    loss, acc, cal, guesses = eval_bayes(predictive, val_loader, device)
+    losses.append(loss / guesses)
+    accs.append(acc / guesses)
     cals.append(cal)
+    percent_guessed.append(guesses/vallen)
 
 
 print("Validation")
-print("\tMEAN\tOPTIM")
-print("Loss:\t{}\t{}".format(np.mean(losses), np.min(losses)))
-print("Acc :\t{}\t{}".format(np.mean(accs) np.max(accs)))
-print("Cal :\t{}\t{}".format(np.mean(cals), np.min(cals)))
+print("      \tMEAN\tOPTIM")
+print("Loss :\t{}\t{}".format(np.mean(losses), np.min(losses)))
+print("Acc  :\t{}\t{}".format(np.mean(accs), np.max(accs)))
+print("Cal  :\t{}\t{}".format(np.mean(cals), np.min(cals)))
+print("Guess:\t{}\t{}".format(np.mean(percent_guessed), np.max(percent_guessed)))

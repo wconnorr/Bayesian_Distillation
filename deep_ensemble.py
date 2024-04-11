@@ -40,8 +40,9 @@ if __name__ == '__main__':
   train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=256, shuffle=True)
   val_loader   = torch.utils.data.DataLoader(val_dataset,   batch_size=256, shuffle=True)
 
-  distiller_sd = load_distiller_sd_fabric('~/Documents/Distillation_Geometry/sl_exp/mnist_normalized_distill_4gpu_fixed/checkpoint2/state.ckpt')
-  distiller = Distiller3D(c, h, w, 10, 6)
+  # distiller_sd = load_distiller_sd_fabric('~/Documents/Distillation_Geometry/sl_exp/mnist_normalized_distill_4gpu_fixed/checkpoint2/state.ckpt')
+  distiller_sd = load_distiller_sd_fabric('./mnist_normalized_distill_b256/checkpoint2/state.ckpt')
+  distiller = Distiller3D(c, h, w, 10, 256)
   distiller.load_state_dict(distiller_sd)
   xd, yd = distiller()
 

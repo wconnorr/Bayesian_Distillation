@@ -46,8 +46,8 @@ if __name__ == '__main__':
   train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=256, shuffle=True)
   val_loader   = torch.utils.data.DataLoader(val_dataset,   batch_size=256, shuffle=True)
 
-  val_std = True
-  val_distill = False
+  val_std = False
+  val_distill = True
 
   if val_std:
     # Train
@@ -79,8 +79,9 @@ if __name__ == '__main__':
     print("MNIST-Trained Learner: (mean acc={:.2f}%)\n\tTraining Calibration Mean = {:.4f}\n\tTraining Calibration Std = {:.4f}\n\tValidation Calibration Mean = {:.4f}\n\tValidation Calibration Std = {:.4f}".format(np.mean(cals_t0_valacc)*100, np.mean(cals_t0_train), np.std(cals_t0_train), np.mean(cals_t0_val), np.std(cals_t0_val)))
 
   if val_distill:
-    distiller_sd = load_distiller_sd_fabric('~/Documents/Distillation_Geometry/sl_exp/mnist_normalized_distill_4gpu_fixed/checkpoint2/state.ckpt')
-    distiller = Distiller3D(c, h, w, 10, 6).to(device)
+    # distiller_sd = load_distiller_sd_fabric('~/Documents/Distillation_Geometry/sl_exp/mnist_normalized_distill_4gpu_fixed/checkpoint2/state.ckpt')
+    distiller_sd = load_distiller_sd_fabric('./mnist_normalized_distill_b256/checkpoint2/state.ckpt')
+    distiller = Distiller3D(c, h, w, 10, 256).to(device)
     distiller.load_state_dict(distiller_sd)
     xd, yd = distiller()
   
@@ -88,6 +89,7 @@ if __name__ == '__main__':
     cals_td_train = []
     cals_td_val  = []
     cals_td_valacc = []
+    cals_td_valloss = []
     
     # Inner learning 
     for trial in tqdm(range(num_trials)):
@@ -101,7 +103,8 @@ if __name__ == '__main__':
   
       # Validate standard learner
       cals_td_train.append(evaluate(model, train_loader, device)[2])
-      _, acc, cal = evaluate(model, val_loader, device)
+      loss, acc, cal = evaluate(model, val_loader, device)
       cals_td_val.append(cal)
       cals_td_valacc.append(acc/len(val_dataset))
-    print("Distill-Trained Learner: (mean acc={:.2f}%)\n\tTraining Calibration Mean = {:.4f}\n\tTraining Calibration Std = {:.4f}\n\tValidation Calibration Mean = {:.4f}\n\tValidation Calibration Std = {:.4f}".format(np.mean(cals_td_valacc)*100, np.mean(cals_td_train), np.std(cals_td_train), np.mean(cals_td_val), np.std(cals_td_val)))
+      cals_td_valloss.append(loss/len(val_dataset))
+    print("Distill-Trained Learner: (mean acc={:.2f}%,mean loss={:.4f})\n\tTraining Calibration Mean = {:.4f}\n\tTraining Calibration Std = {:.4f}\n\tValidation Calibration Mean = {:.4f}\n\tValidation Calibration Std = {:.4f}".format(np.mean(cals_td_valacc)*100, np.mean(cals_td_valloss), np.mean(cals_td_train), np.std(cals_td_train), np.mean(cals_td_val), np.std(cals_td_val)))
