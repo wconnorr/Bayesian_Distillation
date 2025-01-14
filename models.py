@@ -1,3 +1,5 @@
+import random
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -91,6 +93,24 @@ class SimpleConvNet(nn.Module):
       nn.ReLU()
     )
     self.lin = nn.Linear(32*h*w, n_classes)
+
+  def forward(self, x):
+    x = self.convs(x)
+    return self.lin(x.flatten(1))
+
+class RandomArchConvNet(nn.Module):
+  def __init__(self, c, h, w, n_classes):
+    super(RandomArchConvNet, self).__init__()
+    hs = [8, 16, 32, 64, 128]
+    hid = hs[random.randint(0,len(hs)-1)]
+    relu = nn.ReLU()
+    l = random.randint(1,5) # number of random hidden conv layers
+    convs = [nn.Conv2d(c, hid//2, 3, padding=1), relu]
+    for i in range(l):
+      convs.append(nn.Conv2d((hid//2 if i == 0 else hid), hid, 3, padding=1))
+      convs.append(relu) 
+    self.convs = nn.Sequential(*convs)
+    self.lin = nn.Linear(hid*h*w, n_classes)
 
   def forward(self, x):
     x = self.convs(x)

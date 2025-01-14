@@ -10,6 +10,9 @@ import torchvision
 
 import torchmetrics
 
+import sys
+import os
+sys.path.append(os.path.abspath('../'))
 from models import Distiller3D, AtariActor, AtariCritic
 from helper import load_distiller_sd_fabric
 
@@ -24,6 +27,7 @@ def ensemble_prediction(x):
   return torch.mean(torch.stack([model(x) for model in ensemble], dim=0), dim=0)
 
 if __name__ == '__main__':
+  num_trials=1000
   device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
   env = vector_env.make_atari("CentipedeNoFrameskip-v4")
   n_actions = env.action_space.n
@@ -47,10 +51,10 @@ if __name__ == '__main__':
 
   rewards = []
   for model in ensemble:
-    rewards.append(perform_episode(model, simple_act, env, device))
-  ensemble_reward = perform_episode(ensemble, ensemble_act, env, device)
+    rewards.append(np.mean([perform_episode(model, simple_act, env, device) for _ in range(num_trials)]))
+  ensemble_reward = np.mean([perform_episode(ensemble, ensemble_act, env, device) for _ in range(num_trials)])
 
-  # todo: print table
+  print("MEAN TAKEN OVER {} TRIALS".format(num_trials))
   print("Mean reward = {}".format(np.mean(rewards)))
   print("Max  reward = {}".format(np.max(rewards)))
   print("Ens  reward = {}".format(ensemble_reward))

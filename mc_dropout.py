@@ -50,8 +50,8 @@ if __name__ == '__main__':
   val_loader   = torch.utils.data.DataLoader(val_dataset,   batch_size=256, shuffle=True)
 
   with torch.no_grad():
-    distiller_sd = load_distiller_sd_fabric('./mnist_dropout_distill/checkpoint2/state.ckpt')
-    distiller = Distiller3D_Dropout(c, h, w, 10, 6).to(device)
+    distiller_sd = load_distiller_sd_fabric('./mnist_dropout_distill_b256/checkpoint2/state.ckpt')
+    distiller = Distiller3D_Dropout(c, h, w, 10, 256).to(device)
     distiller.load_state_dict(distiller_sd)
     # xd = 0
     # _, yd = distiller()
@@ -70,6 +70,9 @@ if __name__ == '__main__':
   mean_losses = []
   mean_accs = []
   mean_cals = []
+  std_losses = []
+  std_accs = []
+  std_cals = []
 
   # STD Dropout Test
   distiller.eval()
@@ -93,13 +96,16 @@ if __name__ == '__main__':
     cals.append(cal)
   
   print("Validation STD Dropout")
-  print("Loss:\t{}\t{}\t{}".format(np.mean(losses), np.std(losses), np.min(losses)))
-  print("Acc :\t{}\t{}\t{}".format(np.mean(accs), np.std(accs), np.max(accs)))
-  print("Cal :\t{}\t{}\t{}".format(np.mean(cals), np.std(cals), np.min(cals)))
+  d_loss = np.mean(losses)
+  print("Loss:\t{}\t{}\t{}".format(d_loss, np.std(losses), np.min(losses)))
+  d_acc = np.mean(accs)
+  print("Acc :\t{}\t{}\t{}".format(d_acc, np.std(accs), np.max(accs)))
+  d_cal = np.mean(cals)
+  print("Cal :\t{}\t{}\t{}".format(d_cal, np.std(cals), np.min(cals)))
 
   distiller.train()
   
-  for S in range(1,51):
+  for S in range(1,101):
     losses = []
     accs = []
     cals = []
@@ -125,36 +131,43 @@ if __name__ == '__main__':
       cals.append(cal)
     
     print("Validation: S={}".format(S))
-    print("Loss:\t{}\t{}\t{}".format(np.mean(losses), np.std(losses) np.min(losses)))
+    print("Loss:\t{}\t{}\t{}".format(np.mean(losses), np.std(losses), np.min(losses)))
     print("Acc :\t{}\t{}\t{}".format(np.mean(accs), np.std(accs), np.max(accs)))
     print("Cal :\t{}\t{}\t{}".format(np.mean(cals), np.std(cals), np.min(cals)))
 
     mean_losses.append(np.mean(losses))
+    std_losses.append(np.std(losses))
     mean_accs.append(np.mean(accs))
+    std_accs.append(np.std(accs))
     mean_cals.append(np.mean(cals))
+    std_cals.append(np.std(cals))
 
   fig = plt.figure()
-  plt.plot(mean_losses)
+  xs = list(range(1,101))
+  plt.errorbar(xs, mean_losses, std_losses, label='Monte Carlo Dropout')
+  plt.plot([1,51], [d_loss]*2, color='black', label='Standard Dropout')
   plt.title("MC Dropout Validation")
   plt.ylabel("Loss")
   plt.xlabel("S")
-  fig.savefig("mcd_loss_b256.png", dpi=fig.dpi)
+  fig.savefig("mcd_loss_b256_3.png", dpi=fig.dpi)
   plt.close('all')
   
   fig = plt.figure()
-  plt.plot(mean_accs)
+  plt.errorbar(xs, mean_accs, std_accs, label='Monte Carlo Dropout')
+  plt.plot([1,51], [d_acc]*2, color='black', label='Standard Dropout')
   plt.title("MC Dropout Validation")
   plt.ylabel("Accuracy")
   plt.xlabel("S")
-  fig.savefig("mcd_accs_b256.png", dpi=fig.dpi)
+  fig.savefig("mcd_accs_b256_3.png", dpi=fig.dpi)
   plt.close('all')
   
   fig = plt.figure()
-  plt.plot(mean_cals)
+  plt.errorbar(xs, mean_cals, std_cals, label='Monte Carlo Dropout')
+  plt.plot([1,51], [d_cal]*2, color='black', label='Standard Dropout')
   plt.title("MC Dropout Validation")
   plt.ylabel("Calibration")
   plt.xlabel("S")
-  fig.savefig("mcd_cals_b256.png", dpi=fig.dpi)
+  fig.savefig("mcd_cals_b256_3.png", dpi=fig.dpi)
   plt.close('all')
   
   print(time.time() - start)
